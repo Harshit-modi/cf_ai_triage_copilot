@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { bearerToken, checkBearer, json, rateLimitKey, timingSafeEqual, tooManyRequests } from "../src/http";
+import { bearerToken, checkBearer, json, rateLimitKey, timingSafeEqual, tooManyRequests, webhookAuth } from "../src/http";
 
 describe("checkBearer", () => {
-  it("allows everything when no secret is configured", () => {
-    expect(checkBearer(null, undefined)).toBe(true);
-    expect(checkBearer("Bearer whatever", "")).toBe(true);
+  it("fails closed when no secret is configured", () => {
+    expect(checkBearer(null, undefined)).toBe(false);
+    expect(checkBearer("Bearer whatever", undefined)).toBe(false);
+    expect(checkBearer("Bearer whatever", "")).toBe(false);
+    expect(checkBearer("Bearer ", "")).toBe(false);
   });
   it("accepts the right token", () => {
     expect(checkBearer("Bearer s3cret", "s3cret")).toBe(true);
@@ -18,6 +20,34 @@ describe("checkBearer", () => {
     expect(checkBearer("Bearer s3cre", "s3cret")).toBe(false);
     expect(checkBearer("Bearer s3cretx", "s3cret")).toBe(false);
     expect(checkBearer("Bearer S3CRET", "s3cret")).toBe(false);
+  });
+});
+
+describe("webhookAuth", () => {
+  it("with a token, accepts only the matching bearer", () => {
+    expect(webhookAuth("Bearer s3cret", "s3cret", "production")).toBe("ok");
+    expect(webhookAuth("Bearer wrong", "s3cret", "production")).toBe("unauthorized");
+    expect(webhookAuth(null, "s3cret", "production")).toBe("unauthorized");
+    expect(webhookAuth(undefined, "s3cret", undefined)).toBe("unauthorized");
+  });
+  it("with a token, development does not bypass auth", () => {
+    expect(webhookAuth(null, "s3cret", "development")).toBe("unauthorized");
+    expect(webhookAuth("Bearer s3cret", "s3cret", "development")).toBe("ok");
+  });
+  it("without a token, fails closed outside development", () => {
+    for (const env of ["production", undefined, "Development", "staging", "", "dev"]) {
+      expect(webhookAuth("Bearer anything", undefined, env)).toBe("not_configured");
+      expect(webhookAuth(null, undefined, env)).toBe("not_configured");
+    }
+  });
+  it("without a token, allows requests only in development", () => {
+    expect(webhookAuth(null, undefined, "development")).toBe("ok");
+    expect(webhookAuth("Bearer anything", undefined, " development ")).toBe("ok");
+  });
+  it("treats an empty-string token as unset", () => {
+    expect(webhookAuth("Bearer ", "", "production")).toBe("not_configured");
+    expect(webhookAuth(null, "", undefined)).toBe("not_configured");
+    expect(webhookAuth(null, "", "development")).toBe("ok");
   });
 });
 

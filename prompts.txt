@@ -88,3 +88,20 @@ src/prompts.ts (classify prompt, chat prompt, JSON schema).
   -> Token scan clean and .dev.vars not tracked. Added the skip check to the deploy job and set
      CLOUDFLARE_ACCOUNT_ID as a repo secret. The API token still has to be created in the
      cloudflare dashboard.
+
+6. webhook should fail closed (coding agent)
+
+  the webhook is open if WEBHOOK_TOKEN isnt set, thats backwards for prod. make it fail closed.
+  add an ENVIRONMENT var, "production" in wrangler.jsonc. if theres no token and ENVIRONMENT isnt
+  exactly "development", reject with 503 and say auth isnt configured (same as /admin does).
+  local dev can set ENVIRONMENT=development in .dev.vars to skip auth. also make checkBearer
+  return false when theres no secret so nobody reuses it later and gets "open" by accident.
+  keep the decision in a pure function and test it. update README + .dev.vars.example.
+  regenerate worker types without .dev.vars around so CI's types check doesnt break
+
+  -> Reviewed the diff: webhookAuth() is a small pure function, checkBearer fails closed, and the
+     agent added a test I liked (a token set in development is still enforced). 147 tests green.
+     Deployed and checked live: no token 401, wrong token 401, right token 200. Prod has the secret
+     set so the 503 can't be hit there. I checked it locally instead with `wrangler dev --local
+     --env-file` and an empty env file: 503 "webhook auth not configured". With
+     ENVIRONMENT=development it gets past auth.

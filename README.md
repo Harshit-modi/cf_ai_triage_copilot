@@ -12,7 +12,7 @@ Alertmanager sends webhooks to a Worker. **Llama 3.3 on Workers AI** (called thr
 
 ## Features
 
-- **Alertmanager webhook** (`POST /webhook/alertmanager`) with optional bearer auth and per-sender rate limiting.
+- **Alertmanager webhook** (`POST /webhook/alertmanager`) with bearer auth (`WEBHOOK_TOKEN`, required in production) and per-sender rate limiting.
 - **LLM triage** with Llama 3.3 70B (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) using JSON-schema structured output, through AI Gateway so repeat prompts come from the cache.
 - **Retrieval-augmented context**: alerts are embedded with `@cf/baai/bge-base-en-v1.5` and matched against runbooks and past incidents in Vectorize. Each classified alert is written back as a new "past incident".
 - **Per-service Durable Objects** (SQLite) for atomic dedupe and a rolling 200-entry timeline. A singleton registry DO lists every service.
@@ -45,7 +45,7 @@ flowchart LR
 
 ### Webhook flow
 
-1. `checkBearer(WEBHOOK_TOKEN)`, then 401 if it fails. Open if no token is configured.
+1. Auth: if `WEBHOOK_TOKEN` is set, the bearer must match (constant-time), else 401. If it is unset the webhook fails closed with 503, unless `ENVIRONMENT=development` (local only), where auth is skipped and a warning is logged.
 2. `WEBHOOK_LIMITER.limit({ key })`. The key is a hash of the bearer token, or the client IP. Over the limit returns 429 with `Retry-After: 60`.
 3. Parse and validate the payload, keeping at most 100 alerts. Bad input returns 400.
 4. Each alert is processed with at most 4 in flight:
@@ -73,6 +73,7 @@ flowchart LR
 | Model down | `fallbackClassify`: maps label severity and synonyms (`page`, `p1`, `sev2`, `warning`, …) or keywords (`down`, `5xx`, `latency`, …), confidence 0.3, links `runbook_url` if present. Chat falls back to a timeline digest |
 | Retrieval down | `embed`/`querySimilar`/`upsertIncident` catch every error and return empty results. Classification still runs, just without context |
 | Duplicate notifications | `ServiceDO.reserve` is atomic (synchronous SQL in a single-threaded object). The key is `fingerprint:status` with a `DEDUPE_WINDOW_SECONDS` (1h) sliding window. A resolve clears the firing key, so a re-fire is processed again |
+| Webhook auth | Fails closed: no `WEBHOOK_TOKEN` means 503 `webhook auth not configured`, not an open endpoint. `ENVIRONMENT` is `production` in `wrangler.jsonc`; only `ENVIRONMENT=development` in `.dev.vars` skips auth |
 | Floods | Workers Rate Limiting binding: webhook 60/min per token or IP, chat 20/min per IP. At most 10 LLM calls per webhook request, the rest use the fallback |
 | Cost / latency | AI Gateway caching (`cacheTtl: 3600`) for classification. Prompts exclude timestamps and per-pod labels so repeats hit the cache |
 | Validation | Structured output (`response_format: json_schema`) plus strict validation: severity synonyms, confidence scaled from percentages and clamped to 0..1, text fields trimmed and capped at 500 chars |
@@ -83,7 +84,7 @@ All responses are JSON. Examples assume `BASE=http://localhost:8787`.
 
 ### `POST /webhook/alertmanager`
 
-Takes the standard Alertmanager webhook payload (v4). Send `Authorization: Bearer $WEBHOOK_TOKEN` if the secret is set.
+Takes the standard Alertmanager webhook payload (v4). Send `Authorization: Bearer $WEBHOOK_TOKEN`. Returns 401 for a missing or wrong token, and 503 if `WEBHOOK_TOKEN` isn't configured (except with `ENVIRONMENT=development` locally).
 
 ```bash
 curl -X POST $BASE/webhook/alertmanager \
@@ -163,7 +164,7 @@ Requires Node 20+ (CI uses 24) and a Cloudflare account. Workers AI and Vectoriz
 npm install
 npx wrangler login
 npx wrangler vectorize create triage-memory --dimensions=768 --metric=cosine
-cp .dev.vars.example .dev.vars       # then edit the tokens
+cp .dev.vars.example .dev.vars       # then edit the tokens (ENVIRONMENT=development: empty WEBHOOK_TOKEN skips auth locally)
 npm run dev                          # http://localhost:8787
 
 # in another shell
@@ -189,7 +190,7 @@ AI Gateway: `AI_GATEWAY_ID` is `"default"`, which Cloudflare creates automatical
 ```bash
 npx wrangler vectorize create triage-memory --dimensions=768 --metric=cosine   # once
 npx wrangler secret put ADMIN_TOKEN
-npx wrangler secret put WEBHOOK_TOKEN      # optional; if unset the webhook is open
+npx wrangler secret put WEBHOOK_TOKEN      # required; without it the webhook returns 503
 npm run deploy
 curl -X POST https://cf-ai-triage-copilot.cf-ai-triage-copilot.workers.dev/admin/seed -H "Authorization: Bearer $ADMIN_TOKEN"
 ```

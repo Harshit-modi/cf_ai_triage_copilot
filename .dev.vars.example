@@ -1,2 +1,5 @@
 WEBHOOK_TOKEN=change-me
 ADMIN_TOKEN=change-me
+# Local only: with ENVIRONMENT=development and WEBHOOK_TOKEN empty, webhook auth is disabled.
+# Never set this in production (wrangler.jsonc sets ENVIRONMENT=production).
+ENVIRONMENT=development

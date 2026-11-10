@@ -1,7 +1,7 @@
 import { alertName, alertSummary, alertText, dedupeKey, extractService, fingerprintOf, parsePayload } from "../alerts";
 import { REGISTRY_NAME } from "../do/registry-do";
 import { fallbackClassify } from "../fallback";
-import { badRequest, checkBearer, errorResponse, json, rateLimitKey, tooManyRequests, unauthorized } from "../http";
+import { badRequest, errorResponse, json, rateLimitKey, tooManyRequests, unauthorized, webhookAuth } from "../http";
 import { classifyAlert } from "../llm";
 import { embed, querySimilar, upsertIncident } from "../memory";
 import { mapLimit } from "../resilience";
@@ -34,7 +34,14 @@ function realTime(t: string | undefined): string | undefined {
 }
 
 export async function handleWebhook(req: Request, env: AppEnv, ctx: ExecutionContext): Promise<Response> {
-  if (!checkBearer(req.headers.get("authorization"), env.WEBHOOK_TOKEN)) return unauthorized();
+  const auth = webhookAuth(req.headers.get("authorization"), env.WEBHOOK_TOKEN, env.ENVIRONMENT);
+  if (auth === "not_configured") {
+    return errorResponse(503, "webhook auth not configured: set WEBHOOK_TOKEN (wrangler secret put WEBHOOK_TOKEN)");
+  }
+  if (auth === "unauthorized") return unauthorized();
+  if (!env.WEBHOOK_TOKEN) {
+    console.warn(JSON.stringify({ event: "webhook_auth_disabled", reason: "WEBHOOK_TOKEN unset, ENVIRONMENT=development" }));
+  }
 
   try {
     const { success } = await env.WEBHOOK_LIMITER.limit({ key: await rateLimitKey(req) });

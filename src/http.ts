@@ -39,13 +39,30 @@ export function bearerToken(header: string | null | undefined): string | null {
 
 /**
  * Returns true when the Authorization header carries the expected bearer secret.
- * If no secret is configured the endpoint is open, so this returns true.
+ * Fails closed: if no secret is configured (undefined or empty) this returns false.
  */
 export function checkBearer(header: string | null | undefined, secret?: string): boolean {
-  if (!secret) return true;
+  if (!secret) return false;
   const token = bearerToken(header);
   if (token === null) return false;
   return timingSafeEqual(token, secret);
+}
+
+export type WebhookAuthResult = "ok" | "unauthorized" | "not_configured";
+
+/**
+ * Webhook auth decision. With a token set, the bearer must match (constant time).
+ * With no token (undefined or empty), requests are allowed only when ENVIRONMENT is
+ * exactly "development"; anything else (including unset) is treated as production
+ * and reported as "not_configured" so the handler can fail closed with a 503.
+ */
+export function webhookAuth(
+  header: string | null | undefined,
+  token: string | undefined,
+  environment: string | undefined,
+): WebhookAuthResult {
+  if (token) return checkBearer(header, token) ? "ok" : "unauthorized";
+  return environment?.trim() === "development" ? "ok" : "not_configured";
 }
 
 async function sha256Hex(input: string): Promise<string> {
