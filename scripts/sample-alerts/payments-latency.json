@@ -1,0 +1,31 @@
+{
+  "version": "4",
+  "status": "firing",
+  "receiver": "triage-copilot",
+  "groupLabels": { "alertname": "PaymentsHighLatency" },
+  "commonLabels": { "alertname": "PaymentsHighLatency", "app": "payments", "severity": "warning", "env": "prod" },
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": { "alertname": "PaymentsHighLatency", "app": "payments", "severity": "warning", "env": "prod", "route": "/v1/authorize" },
+      "annotations": {
+        "summary": "Payments p99 latency is 6.2s (SLO 1.5s)",
+        "description": "p99 latency on /v1/authorize has exceeded 5s for 10 minutes. Upstream card processor calls account for most of the time."
+      },
+      "startsAt": "2026-11-09T14:05:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "fingerprint": "c0ffee0000000002"
+    },
+    {
+      "status": "firing",
+      "labels": { "alertname": "PaymentsDBPoolSaturation", "app": "payments", "severity": "warning", "env": "prod" },
+      "annotations": {
+        "summary": "Payments DB connection pool 96% utilised",
+        "description": "Active connections 48/50 on payments-primary; requests waiting for a connection."
+      },
+      "startsAt": "2026-11-09T14:06:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "fingerprint": "c0ffee0000000003"
+    }
+  ]
+}

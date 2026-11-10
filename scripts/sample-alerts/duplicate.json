@@ -1,0 +1,26 @@
+{
+  "version": "4",
+  "status": "firing",
+  "receiver": "triage-copilot",
+  "commonLabels": { "alertname": "CheckoutHighErrorRate", "service": "checkout-api" },
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "CheckoutHighErrorRate",
+        "service": "checkout-api",
+        "severity": "critical",
+        "env": "prod",
+        "instance": "10.0.3.17:8080",
+        "pod": "checkout-api-7d9f8c6b5-x2k4q"
+      },
+      "annotations": {
+        "summary": "Checkout API is down: 38% of requests returning 5xx",
+        "description": "Repeat notification for the same alert (same fingerprint). Should be reported as a duplicate."
+      },
+      "startsAt": "2026-11-09T14:02:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "fingerprint": "c0ffee0000000001"
+    }
+  ]
+}

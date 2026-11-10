@@ -1,0 +1,27 @@
+{
+  "version": "4",
+  "status": "resolved",
+  "receiver": "triage-copilot",
+  "groupLabels": { "alertname": "CheckoutHighErrorRate" },
+  "commonLabels": { "alertname": "CheckoutHighErrorRate", "service": "checkout-api", "severity": "critical", "env": "prod" },
+  "alerts": [
+    {
+      "status": "resolved",
+      "labels": {
+        "alertname": "CheckoutHighErrorRate",
+        "service": "checkout-api",
+        "severity": "critical",
+        "env": "prod",
+        "instance": "10.0.3.17:8080",
+        "pod": "checkout-api-7d9f8c6b5-x2k4q"
+      },
+      "annotations": {
+        "summary": "Checkout API is down: 38% of requests returning 5xx",
+        "description": "HTTP 5xx ratio for checkout-api has been above 30% for 5 minutes, starting 3 minutes after deploy 2026.45.1."
+      },
+      "startsAt": "2026-11-09T14:02:00Z",
+      "endsAt": "2026-11-09T14:19:00Z",
+      "fingerprint": "c0ffee0000000001"
+    }
+  ]
+}

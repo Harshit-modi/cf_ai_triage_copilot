@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-ai-triage-copilot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/webhook/*", "/admin/*"]
+  },
+  "ai": { "binding": "AI", "remote": true },
+  "vectorize": [{ "binding": "MEMORY", "index_name": "triage-memory", "remote": true }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SERVICE_DO", "class_name": "ServiceDO" },
+      { "name": "REGISTRY_DO", "class_name": "RegistryDO" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ServiceDO", "RegistryDO"] }],
+  "ratelimits": [
+    { "name": "WEBHOOK_LIMITER", "namespace_id": "4101", "simple": { "limit": 60, "period": 60 } },
+    { "name": "CHAT_LIMITER", "namespace_id": "4102", "simple": { "limit": 20, "period": 60 } }
+  ],
+  "vars": {
+    "AI_GATEWAY_ID": "default",
+    "DEDUPE_WINDOW_SECONDS": "3600",
+    "LLM_TIMEOUT_MS": "12000",
+    "MAX_LLM_PER_REQUEST": "10"
+  }
+  // secrets: WEBHOOK_TOKEN (optional), ADMIN_TOKEN (required for /admin)
+}

@@ -1,0 +1,19 @@
+{
+  "name": "cf-ai-triage-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:local": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "wrangler": "^4.159.0"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "version": "4",
+  "groupKey": "{}:{alertname=\"CheckoutHighErrorRate\"}",
+  "status": "firing",
+  "receiver": "triage-copilot",
+  "groupLabels": { "alertname": "CheckoutHighErrorRate" },
+  "commonLabels": { "alertname": "CheckoutHighErrorRate", "service": "checkout-api", "severity": "critical", "env": "prod" },
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager.example.com",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "CheckoutHighErrorRate",
+        "service": "checkout-api",
+        "severity": "critical",
+        "env": "prod",
+        "instance": "10.0.3.17:8080",
+        "pod": "checkout-api-7d9f8c6b5-x2k4q"
+      },
+      "annotations": {
+        "summary": "Checkout API is down: 38% of requests returning 5xx",
+        "description": "HTTP 5xx ratio for checkout-api has been above 30% for 5 minutes, starting 3 minutes after deploy 2026.45.1.",
+        "runbook_url": "https://runbooks.example.com/high-5xx-rate"
+      },
+      "startsAt": "2026-11-09T14:02:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.example.com/graph?g0.expr=checkout_5xx_ratio",
+      "fingerprint": "c0ffee0000000001"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Triage Copilot</title>
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #161d24; --panel-2: #1d262f; --border: #2a3540;
+      --text: #e6edf3; --muted: #8b98a5; --accent: #f6821f; --accent-2: #fbad41;
+      --critical: #ff5c5c; --high: #ff9f43; --medium: #f7d154; --low: #5ac8fa; --info: #8b98a5;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    header {
+      display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+      border-bottom: 1px solid var(--border); background: var(--panel);
+    }
+    header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+    header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    header .sub { color: var(--muted); font-size: 13px; margin-left: auto; }
+    main {
+      display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
+      padding: 16px; height: calc(100% - 53px);
+    }
+    section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); min-height: 0; }
+    .chat { display: flex; flex-direction: column; }
+    .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 85%; padding: 10px 14px; border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word; }
+    .msg.user { align-self: flex-end; background: #2b3a4a; }
+    .msg.bot { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); }
+    .msg.bot.pending { color: var(--muted); font-style: italic; }
+    .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .meta .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--bg); margin: 2px 4px 0 0; }
+    .meta .tag.fallback { color: var(--high); }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+    .suggestions button {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+      border-radius: 999px; padding: 4px 10px; font-size: 13px; cursor: pointer;
+    }
+    .suggestions button:hover { color: var(--text); border-color: var(--accent); }
+    form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
+    textarea {
+      flex: 1; resize: none; min-height: 44px; max-height: 140px; padding: 10px 12px;
+      background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font: inherit;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); }
+    form button {
+      background: var(--accent); color: #111; border: 0; border-radius: 8px; padding: 0 18px;
+      font-weight: 600; cursor: pointer;
+    }
+    form button:disabled { opacity: .5; cursor: default; }
+    .side { display: flex; flex-direction: column; overflow: hidden; }
+    .side h2 {
+      font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+      margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .side h2 button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; }
+    .services { list-style: none; margin: 0; padding: 6px; max-height: 40%; overflow-y: auto; border-bottom: 1px solid var(--border); }
+    .services li {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    }
+    .services li:hover, .services li.active { background: var(--panel-2); }
+    .services .name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .services .count { color: var(--muted); font-size: 12px; }
+    .sev { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; color: #111; }
+    .sev.critical { background: var(--critical); } .sev.high { background: var(--high); }
+    .sev.medium { background: var(--medium); } .sev.low { background: var(--low); } .sev.info { background: var(--info); }
+    .timeline { flex: 1; overflow-y: auto; padding: 8px 14px; }
+    .entry { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .entry:last-child { border-bottom: 0; }
+    .entry .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .entry .alertname { font-weight: 600; }
+    .entry .when { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .entry .status-resolved { color: #6fdc8c; font-size: 12px; }
+    .entry p { margin: 4px 0 0; font-size: 13px; }
+    .entry .label { color: var(--muted); }
+    .empty { color: var(--muted); padding: 16px 14px; font-size: 14px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; height: auto; padding: 12px; }
+      .chat { height: 70vh; min-height: 420px; }
+      .side { max-height: 80vh; }
+      .msg { max-width: 95%; }
+      header .sub { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="dot" aria-hidden="true"></span>
+    <h1>Triage Copilot</h1>
+    <span class="sub">Workers AI · Durable Objects · Vectorize</span>
+  </header>
+  <main>
+    <section class="chat" aria-label="Chat">
+      <div class="messages" id="messages" aria-live="polite">
+        <div class="msg bot">Hi! Ask me about your services, e.g. "what's happening with checkout?" Answers are grounded in recent alerts and runbooks.</div>
+      </div>
+      <div class="suggestions" id="suggestions">
+        <button type="button">What's on fire right now?</button>
+        <button type="button">What's happening with checkout?</button>
+        <button type="button">What should I do about payments latency?</button>
+      </div>
+      <form id="chat-form">
+        <textarea id="input" placeholder="Ask about an incident…" maxlength="1000" rows="1" required></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+    </section>
+    <section class="side" aria-label="Services">
+      <h2>Services <button type="button" id="refresh" title="Refresh">↻ refresh</button></h2>
+      <ul class="services" id="services"><li class="empty">Loading…</li></ul>
+      <h2 id="timeline-title">Timeline</h2>
+      <div class="timeline" id="timeline"><div class="empty">Select a service to see its timeline.</div></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check generated Worker types are up to date
+        run: npx wrangler types --check
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npx vitest run
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - name: Skip deploy when Cloudflare secrets are not configured
+        if: env.HAS_CF_TOKEN != 'true'
+        run: echo "::notice::CLOUDFLARE_API_TOKEN not set; skipping deploy (see README > GitHub Actions)."
+      - uses: actions/checkout@v4
+        if: env.HAS_CF_TOKEN == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_CF_TOKEN == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: env.HAS_CF_TOKEN == 'true'
+      - uses: cloudflare/wrangler-action@v3
+        if: env.HAS_CF_TOKEN == 'true'
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

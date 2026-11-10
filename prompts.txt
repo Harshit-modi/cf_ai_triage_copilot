@@ -1,0 +1,90 @@
+Prompt history - cf_ai_triage_copilot
+
+Built with Claude Code (AI-assisted coding is allowed for the assignment, they just want the prompts).
+I used one agent to plan and another to write the code. I reviewed what each one gave back and did
+the deploy myself. Prompts are listed in order, mostly verbatim (typos kept). Under each one is what
+came back and what I decided about it.
+
+The prompts the app itself sends to Llama 3.3 at runtime are a different thing. Those live in
+src/prompts.ts (classify prompt, chat prompt, JSON schema).
+
+------------------------------------------------------------------------
+
+1. plan (planning agent)
+
+  ok so I want to build "triage copilot", an alert triage assistant for on-call, on cloudflare.
+
+  - alertmanager webhooks come into a worker
+  - llama 3.3 on workers AI classifies each alert: severity, user impact, likely cause, suggested
+    action. send the calls through AI gateway so we get caching
+  - one durable object per service, it should dedupe repeat alerts and keep a timeline of whats
+    been happening
+  - vectorize with old incidents/runbooks, pull top 3 similar ones as context
+  - small chat page so I can ask "whats happening with checkout?"
+  - timeouts + retries on the llm call, and if the model dies just fall back to rule based severity.
+    rate limit the webhook too
+
+  check the current cloudflare docs where you're not sure, especially agents sdk vs a plain DO,
+  and how local dev works with AI/vectorize. dont write code yet, give me a plan: file layout,
+  wrangler config, DO schema, request flows, tests. keep it small, I want this done in a day
+
+  -> Got a full plan back. What I decided after reading it:
+     - Went with its suggestion of a plain sqlite DO and no Agents SDK. We dont need websockets or
+       state sync, and it's fewer moving parts.
+     - Registry DO for the list of services instead of KV, so there's nothing extra to provision.
+     - It said a named AI gateway has to be created in the dashboard but "default" gets created
+       automatically, so I set AI_GATEWAY_ID to "default".
+     - Dedupe "reserve" runs synchronously inside the DO and the llm call stays in the worker. That
+       way concurrent duplicates still get caught and the DO isnt stuck waiting on llama.
+     - Webhook stays synchronous so the curl response shows the result per alert. Downside is
+       ~10-20s when a lot of alerts arrive at once. Ok for now, noted in the README.
+
+2. build (coding agent)
+
+  here's the plan, build it as is with these changes: plain DO, registry DO, gateway "default",
+  compat date that the installed wrangler accepts. run wrangler types and only use cacheTtl /
+  getByName if the generated types actually have them. keep logic in pure modules so vitest runs
+  without the workers runtime. dont touch prompts.txt, dont commit or deploy, I'll review first.
+  done means tsc clean, tests green, and a dry run deploy that works
+
+  -> Came back with everything plus a few extras: 413 for big bodies, a 500 for a partly failed
+     batch so alertmanager retries, a `wrangler types --check` step in CI.
+     What I checked before accepting:
+     - Ran tsc and vitest myself: clean, 142 passing.
+     - Read the DO reserve logic. Resolving an alert clears the firing key, so if it fires again it
+       doesnt get swallowed as a duplicate. Good.
+     - It typed secrets as `Env & Secrets` instead of patching Env, because the other way breaks
+       tsc when .dev.vars exists. Kept that.
+     - It flagged that only the fallback path got tested locally (AI is remote only), so I made
+       checking against the real model part of the deploy step.
+     While it was building I created the vectorize index:
+       npx wrangler vectorize create triage-memory --dimensions=768 --metric=cosine
+
+3. deploy
+
+  deploy it. generate tokens for ADMIN_TOKEN and WEBHOOK_TOKEN and put them in with wrangler
+  secret put, keep a copy in .dev.vars (gitignored). then seed the runbooks and push the sample
+  alerts at the live url. I want to see source "llm" come back, not fallback
+
+  -> First curl failed on TLS handshake. The workers.dev subdomain was brand new and the cert
+     wasnt ready yet, so I waited instead of changing anything.
+     After that: seed returned 13, no token gives 401, checkout-down came back critical with
+     source "llm", the duplicate got deduped, and the resolved alert reused the earlier triage.
+
+4. empty sources in chat
+
+  chat answers look fine but sources is always empty. is retrieval broken?
+
+  -> `wrangler vectorize info` said vectorCount 0. Inserts on a new index are processed async, so
+     I waited rather than touch the code. A few min later it had 13, and the payments question
+     came back with the provider-timeout incident and the p99 latency runbook.
+
+5. github + CI
+
+  put the live url in the readme and push to a public repo under Harshit-modi. check the commit
+  has no secrets first. also the deploy job will fail on the first push since the repo has no
+  CLOUDFLARE_API_TOKEN yet, make it skip with a message instead of failing
+
+  -> Token scan clean and .dev.vars not tracked. Added the skip check to the deploy job and set
+     CLOUDFLARE_ACCOUNT_ID as a repo secret. The API token still has to be created in the
+     cloudflare dashboard.
